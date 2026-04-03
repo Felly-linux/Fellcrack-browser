@@ -1,0 +1,67 @@
+#!/bin/bash
+# 🛡️ OPSEC BROWSER - Main CLI
+# Usage: opsec-browser [--tor|--proxy|--normal] [--profile NAME] [URL]
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/core.sh"
+
+# Default values
+MODE="normal"
+PROFILE="default"
+URL=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --tor)
+            MODE="opsec"
+            shift
+            ;;
+        --proxy)
+            MODE="proxy"
+            shift
+            ;;
+        --normal)
+            MODE="normal"
+            shift
+            ;;
+        --privacy)
+            MODE="privacy"
+            shift
+            ;;
+        --profile)
+            PROFILE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            cat <<EOF
+🛡️ OPSEC BROWSER - Privacy-First Navigation
+
+USAGE: opsec-browser [OPTIONS] [URL]
+
+OPTIONS:
+  --normal            Standard mode (no privacy features)
+  --privacy           Privacy mode (DNS-HTTPS + anti-fingerprint)
+  --tor               TOR mode (all traffic via TOR)
+  --proxy             Proxy mode (configurable proxy)
+  --profile NAME      Use specific profile (default: default)
+  --help              Show this help
+
+EXAMPLES:
+  opsec-browser --tor
+  opsec-browser --tor https://example.onion
+  opsec-browser --profile banking https://mybank.com
+  opsec-browser --privacy https://duckduckgo.com
+
+EOF
+            exit 0
+            ;;
+        *)
+            URL="$1"
+            shift
+            ;;
+    esac
+done
+
+# Launch
+launch_brave "$MODE" "$PROFILE" "$URL"
