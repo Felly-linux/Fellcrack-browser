@@ -1,0 +1,146 @@
+# 🏗️ Sentinel Browser PKGBUILD
+# Arch Linux package definition for Sentinel Browser
+
+pkgname=sentinel-browser
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Privacy-first Brave fork with TOR integration, DNS over HTTPS/TLS, and OPSEC routing"
+arch=('x86_64')
+url="https://github.com/your-user/sentinel-browser"
+license=('MPL2' 'Apache')
+
+depends=(
+    'gtk3'
+    'nss'
+    'ttf-dejavu'
+    'libxss'
+    'libgcrypt'
+)
+
+makedepends=(
+    'base-devel'
+    'git'
+    'ninja'
+    'python'
+    'gn'
+    'clang'
+    'node'
+)
+
+optdepends=(
+    'tor: For TOR integration'
+    'torsocks: For TOR socket wrapper'
+    'wireguard-tools: For VPN integration'
+    'ublock-origin: Ad blocking'
+)
+
+source=(
+    "git+https://github.com/brave/brave-browser.git"
+)
+
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${srcdir}/brave-browser"
+    
+    # Aplicar parches personalizados si existen
+    if [ -d "${srcdir}/patches" ]; then
+        for patch in "${srcdir}"/patches/*.patch; do
+            patch -Np1 < "$patch"
+        done
+    fi
+}
+
+build() {
+    cd "${srcdir}/brave-browser"
+    
+    # Setup depot_tools
+    export PATH="/tmp/depot_tools:$PATH"
+    
+    # Configuration GN para Arch
+    local _gn_flags=(
+        'is_official_build=true'
+        'is_debug=false'
+        'target_os="linux"'
+        'target_cpu="x64"'
+        'enable_nacl=false'
+        'enable_plugins=false'
+        'enable_extensions=true'
+        'enable_widevine=false'
+        'safe_browsing_mode=0'
+        'enable_reporting=false'
+        'enable_socks5=true'
+        'enable_brave_fingerprint_protection=true'
+        'use_sysroot=false'
+        'use_custom_libcxx=true'
+        'symbol_level=1'
+        'v8_symbol_level=0'
+        'blink_symbol_level=0'
+    )
+    
+    mkdir -p out/Release
+    gn gen out/Release --args="$(printf '%s ' "${_gn_flags[@]}")"
+    
+    ninja -C out/Release brave
+}
+
+package() {
+    cd "${srcdir}/brave-browser/out/Release"
+    
+    # Instalar binario
+    install -Dm755 brave "${pkgdir}/usr/bin/sentinel-browser"
+    
+    # Instalar recursos
+    install -dm755 "${pkgdir}/usr/lib/sentinel-browser"
+    cp -r --no-preserve=ownership \
+        locales \
+        resources \
+        *.so \
+        *.pak \
+        "${pkgdir}/usr/lib/sentinel-browser/" 2>/dev/null || true
+    
+    # Desktop entry
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/sentinel-browser.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Sentinel Browser
+Comment=Privacy-first Brave fork with TOR integration
+Exec=sentinel-browser %u
+Icon=brave
+Categories=Network;
+StartupNotify=true
+EOF
+    
+    # Icon
+    install -Dm644 "${srcdir}/brave-browser/app/theme/brave.png" \
+        "${pkgdir}/usr/share/pixmaps/brave.png" || true
+    
+    # Man page
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/man/man1/sentinel-browser.1" <<EOF
+.TH SENTINEL-BROWSER 1
+.SH NAME
+sentinel-browser \- privacy-first web browser with TOR integration
+.SH SYNOPSIS
+.B sentinel-browser
+[OPTIONS] [URL...]
+.SH DESCRIPTION
+Sentinel Browser is a privacy-optimized fork of Brave with integrated TOR support,
+DNS over HTTPS/TLS, and advanced OPSEC routing capabilities.
+.SH OPTIONS
+.TP
+.B --tor
+Force all traffic through TOR
+.TP
+.B --mode opsec
+Enable OPSEC mode (TOR + anti-fingerprinting)
+.TP
+.B --profile NAME
+Use specific profile
+.SH EXAMPLES
+.TP
+.B sentinel-browser --mode opsec https://duckduckgo.com
+.TP
+.B sentinel-browser --tor https://example.onion
+EOF
+}

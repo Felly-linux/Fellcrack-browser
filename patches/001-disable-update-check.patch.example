@@ -1,0 +1,15 @@
+# Ejemplo: Parche para deshabilitar check de actualizaciones
+# Nombre: 001-disable-update-check.patch
+
+--- a/components/update_client/update_checker.cc
++++ b/components/update_client/update_checker.cc
+@@ -50,7 +50,7 @@ UpdateChecker::UpdateChecker(const scoped_refptr<Configurator>& config,
+ 
+ void UpdateChecker::CheckForUpdates(
+     const std::vector<std::string>& ids,
+     const UpdateChecker::CompletionCallback& completion_callback) {
+-  // Check for updates enabled
++  // Sentinel Browser: Updates disabled for OPSEC
++  completion_callback.Run(Error::INVALID_RESPONSE, {}, false);
++  return;
+ }

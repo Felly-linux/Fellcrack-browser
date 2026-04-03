@@ -1,0 +1,171 @@
+#!/bin/bash
+# 🛡️ Sentinel Browser - CLI Launcher
+# Ejecuta Brave con configuración OPSEC específica
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD_DIR="$PROJECT_ROOT/build"
+
+# Resolver ruta al navegador compilado
+BROWSER_BINARY=""
+if [ -f "$BUILD_DIR/sentinel-browser" ]; then
+    BROWSER_BINARY="$BUILD_DIR/sentinel-browser"
+elif [ -f "$BUILD_DIR/out/brave-release/brave" ]; then
+    BROWSER_BINARY="$BUILD_DIR/out/brave-release/brave"
+elif command -v brave &>/dev/null; then
+    BROWSER_BINARY="$(command -v brave)"
+elif command -v chromium &>/dev/null; then
+    BROWSER_BINARY="$(command -v chromium)"
+fi
+
+if [ -z "$BROWSER_BINARY" ] || [ ! -f "$BROWSER_BINARY" ]; then
+    echo "❌ NAVEGADOR NO ENCONTRADO"
+    echo ""
+    echo "Necesitas compilar primero:"
+    echo "  ./scripts/bootstrap.sh"
+    echo "  ./scripts/build.sh --release"
+    exit 1
+fi
+
+# Configuración por defecto
+MODE="normal"
+PROFILE_DIR=""
+TOR_ENABLED=false
+VPN_ENABLED=false
+OFFLINE_MODE=false
+
+# Parsear argumentos
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mode)
+            MODE="$2"
+            shift 2
+            ;;
+        --profile)
+            PROFILE_DIR="$2"
+            shift 2
+            ;;
+        --tor)
+            TOR_ENABLED=true
+            shift
+            ;;
+        --vpn)
+            VPN_ENABLED=true
+            shift
+            ;;
+        --offline)
+            OFFLINE_MODE=true
+            shift
+            ;;
+        --help)
+            cat <<'HELP'
+🛡️ SENTINEL BROWSER - Privacy-First Navigation
+
+USAGE: ./scripts/sentinel [OPTIONS] [URL...]
+
+OPTIONS:
+  --mode MODE         privacy | opsec | tor (default: normal)
+  --profile NAME      Use specific profile
+  --tor              Force all traffic through TOR
+  --vpn              Use system VPN
+  --offline          Offline mode
+  --help             Show this help
+
+EXAMPLES:
+  ./scripts/sentinel
+  ./scripts/sentinel --mode opsec
+  ./scripts/sentinel --tor https://example.onion
+  ./scripts/sentinel --profile banking https://mybank.com
+
+MODES:
+  normal   - Standard Brave navigation
+  privacy  - DNS/HTTPS + anti-fingerprinting
+  opsec    - Maximum privacy: TOR + hardening
+  tor      - All traffic via TOR (.onion support)
+
+HELP
+            exit 0
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Preparar directorio de perfil
+if [ -z "$PROFILE_DIR" ]; then
+    PROFILE_DIR="$HOME/.sentinel-browser/default"
+fi
+mkdir -p "$PROFILE_DIR"
+
+# Construir flags de Chromium
+FLAGS=(
+    "--user-data-dir=$PROFILE_DIR"
+    "--no-first-run"
+    "--no-default-browser-check"
+)
+
+# Aplicar modo específico
+case "$MODE" in
+    privacy)
+        FLAGS+=(
+            "--disable-plugins"
+            "--disable-default-apps"
+        )
+        ;;
+    opsec)
+        FLAGS+=(
+            "--disable-plugins"
+            "--disable-extensions"
+            "--disable-default-apps"
+            "--no-service-autorun"
+            "--disable-sync"
+        )
+        TOR_ENABLED=true
+        ;;
+    tor|onion)
+        FLAGS+=(
+            "--disable-plugins"
+            "--disable-extensions"
+            "--no-service-autorun"
+        )
+        TOR_ENABLED=true
+        ;;
+esac
+
+# TOR proxy
+if [ "$TOR_ENABLED" = true ]; then
+    # Verificar TOR disponible
+    if ! (echo "PING" > /dev/tcp/127.0.0.1/9050) 2>/dev/null; then
+        echo "⚠️ TOR no está disponible en 127.0.0.1:9050"
+        echo "Inicia TOR:"
+        echo "  sudo systemctl start tor"
+        echo "  # o"
+        echo "  tor &"
+        exit 1
+    fi
+    FLAGS+=("--proxy-server=socks5://127.0.0.1:9050")
+    echo "🧅 Modo TOR ACTIVO"
+fi
+
+# VPN
+if [ "$VPN_ENABLED" = true ]; then
+    if ip link show tun0 &>/dev/null || ip link show wg0 &>/dev/null; then
+        echo "📡 VPN del sistema detectada"
+    fi
+fi
+
+# Offline
+if [ "$OFFLINE_MODE" = true ]; then
+    FLAGS+=("--offline")
+    echo "📴 Modo OFFLINE"
+fi
+
+# Información
+echo "🚀 Sentine Browser"
+echo "   Modo: $MODE"
+echo "   Perfil: $PROFILE_DIR"
+echo "   Binario: $BROWSER_BINARY"
+echo ""
+
+# Ejecutar
+exec "$BROWSER_BINARY" "${FLAGS[@]}" "$@"

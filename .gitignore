@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+out/
+*.o
+*.a
+*.so
+*.dylib
+
+# Dependencies
+third_party/
+src/brave/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local config
+.env
+local-config.yml
